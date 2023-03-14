@@ -1,48 +1,52 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+
 import { Post } from './post.model';
 
 @Injectable()
 export class PostService {
-  posts: Post[] = [];
+  private posts: Post[] = [];
 
-  insertPost(title: string) {
-    const id = Math.random().toString();
-    const post = new Post(id, title);
-    this.posts.push(post);
+  constructor(@InjectModel('Post') private readonly postModel: Model<Post>) {}
 
-    return id;
+  async insertPost(title: string) {
+    const post = new this.postModel({ title });
+    const result = await post.save();
+
+    return result.id as string;
   }
 
-  getPosts() {
-    return [...this.posts];
+  async getPosts() {
+    const posts = await this.postModel.find().exec();
+    return posts as Post[];
   }
 
-  getPost(id: string) {
-    const [post] = this.findPost(id);
-    return { ...post };
+  async getPost(id: string) {
+    const post = await this.findPost(id);
+    return post;
   }
 
-  updatePost(id: string, title: string) {
-    const [post, index] = this.findPost(id);
-    const updatedPost = { ...post };
+  async updatePost(id: string, title: string) {
+    const updatedPost = await this.findPost(id);
     if (title) {
       updatedPost.title = title;
     }
-    this.posts[index] = updatedPost;
+    await updatedPost.save();
   }
 
-  deletePost(id: string) {
-    const index = this.findPost(id)[1];
-    this.posts.splice(index, 1);
+  async deletePost(id: string) {
+    const result = await this.postModel.deleteOne({ _id: id }).exec();
+    if (result.deletedCount === 0) {
+      throw new NotFoundException('Could not find post.');
+    }
   }
 
-  private findPost(id: string): [Post, number] {
-    const postIndex = this.posts.findIndex((el) => el.id === id);
-    const post = this.posts[postIndex];
+  private async findPost(id: string): Promise<Post> {
+    const post = await this.postModel.findById(id);
     if (!post) {
       throw new NotFoundException('Could not find post.');
     }
-
-    return [post, postIndex];
+    return post;
   }
 }
